@@ -1,0 +1,431 @@
+---
+title: "Final Project"
+output: html_document
+date: "2023-11-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Clear working memory
+rm(list=ls())
+
+library(tidyverse)
+library(fpp)
+library(tseries)
+library(ggplot2)
+library(forecast)
+library(plotly)
+library(readxl)
+library(xts)
+library(TSA)
+```
+
+```{r}
+# set directory
+#C:/Users/nugra/OneDrive - The University of Chicago/UChicago/Time Series HW/Final Project
+
+setwd('C:/Users/Shofi/Desktop/Fall 2023/ADSP 31006 - Time Series Analysis and Forecasting/Final Project/forecast-tourist-arrival')
+getwd()
+```
+
+```{r}
+# LOAD THE DATA
+df_arrival <-read_xlsx('arrival.xlsx')
+
+head(df_arrival)
+
+# CREATING TIME SERIES DATA
+arrival <- ts(df_arrival$arrival, start = c(2000,1), frequency = 12)
+head(arrival)
+
+# PLOTTING
+autoplot(arrival, main = "Monthly Tourist Arrival in Indonesia, January 2000 - December 2019", 
+         ylab = "Tourist Arrival", xlab = "Year")
+
+seasonplot(arrival, main = "Seasonal Plot of Tourist Arrival Indonesia, 
+           January 2000 - December 2019")
+
+```
+
+```{r}
+# CHECKING THE NORMALITY
+hist(arrival, main = "Histogram of Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2019")
+
+shapiro.test(arrival)
+```
+
+```{r}
+# CUT AND SPLIT THE DATA
+training_arrival <- window(arrival,  start = c(2000,1), end = c(2015,12))
+
+test_arrival <- window(arrival, start= c(2016,1), end = c(2019,12))
+
+autoplot(training_arrival)
+autoplot(test_arrival)
+
+seasonplot(training_arrival)
+
+# CHECKING THE NORMALITY
+hist(training_arrival, main = "Histogram of Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2015")
+
+shapiro.test(training_arrival)
+
+# CHECKING STATIONARITY
+tsdisplay(training_arrival, main = "ACF and PACF for Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2015")
+
+acf(training_arrival)
+pacf(training_arrival)
+kpss.test(training_arrival)
+adf.test(training_arrival)
+
+
+
+```
+
+```{r}
+# BOX COX TRANSFORMATION
+auto_lambda <- BoxCox.lambda(training_arrival)
+auto_lambda
+
+training_arrival_bcauto <- BoxCox(training_arrival,auto_lambda)
+plot(training_arrival_bcauto)
+hist(training_arrival_bcauto)
+shapiro.test(training_arrival_bcauto)
+kpss.test(training_arrival_bcauto, null=c("Level"))
+
+acf(training_arrival_bcauto)
+```
+
+```{r}
+#####################################################CHANGE
+#detrending -> data after boxcox
+training_arrival_bc_detrend <- diff(training_arrival_bcauto, differences=1)
+plot(training_arrival_bc_detrend, type="l")
+kpss.test(training_arrival_bc_detrend, null=c("Level"))
+tsdisplay(training_arrival_bc_detrend)
+
+#deseasonal -> data after boxcox and detrending in first order differencing
+order_sa_1 <- training_arrival_bc_detrend %>% diff(lag=12)
+plot(order_sa_1)
+tsdisplay(order_sa_1)
+kpss.test(order_sa_1, null=c("Level"))
+
+```
+
+```{r}
+training_arrival %>% stl(s.window="periodic") %>% autoplot()
+```
+
+```{r}
+periodogram(training_arrival_bc_detrend)
+training_arrival_bc_detrend %>% stl(s.window="periodic") %>% autoplot()
+```
+
+```{r}
+#BENCHMARK SEASONAL NAIVE
+
+#forecast
+method_seasonal_naive <- snaive(training_arrival, h=48, lambda = auto_lambda)
+summary(method_seasonal_naive)
+plot(method_seasonal_naive)
+lines(test_arrival, type = "l", col = "red")
+
+#accuracy check
+checkresiduals(method_seasonal_naive)
+accuracy_seasonal_naive <- accuracy(method_seasonal_naive, test_arrival)
+accuracy_seasonal_naive
+rmse_seasonal_naive <- accuracy_seasonal_naive[4]
+mape_seasonal_naive <- accuracy_seasonal_naive[10]
+mse_seasonal_naive <- mean(abs((test_arrival - method_seasonal_naive$mean))^2)
+```
+
+```{r}
+#BENCHMARK HOLT-WINTERS METHOD
+
+arr_mult <- decompose(training_arrival, type="multiplicative")
+plot(arr_mult)
+
+#forecast
+method_mult_nodamped_hw <- hw(training_arrival, h=48, seasonal="multiplicative", damped=FALSE)
+summary(method_mult_nodamped_hw$model)
+plot(method_mult_nodamped_hw$model)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(method_mult_nodamped_hw$model)
+accuracy_mult_nodamped_hw <- accuracy(method_mult_nodamped_hw, test_arrival)
+accuracy_mult_nodamped_hw
+rmse_mult_nodamped_hw <- accuracy_mult_nodamped_hw[4]
+mape_mult_nodamped_hw <- accuracy_mult_nodamped_hw[10]
+mse_mult_nodamped_hw <- mean(abs((test_arrival - method_mult_nodamped_hw$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "methoD: holt-winters"),RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw),
+                       MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw),
+                       MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw))
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK SIMPLE EXPONENTIAL SMOOTHING
+
+#forecast
+method_ses <- ses(training_arrival, lambda = auto_lambda, h = 48)
+summary(method_ses$model)
+plot(method_ses)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(method_ses)
+accuracy_ses <- accuracy(method_ses, test_arrival)
+accuracy_ses
+rmse_ses<- accuracy_ses[4]
+mape_ses <- accuracy_ses[10]
+mse_ses <- mean(abs((test_arrival - method_ses$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw, rmse_ses),
+                       MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses),
+                       MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses))
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK HOLT
+
+#forecast
+method_holt <- holt(training_arrival, lambda = auto_lambda, h = 48)
+summary(method_holt$model)
+plot(method_holt)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(method_holt)
+accuracy_holt <- accuracy(method_holt, test_arrival)
+accuracy_holt
+rmse_holt <- accuracy_holt[4]
+mape_holt <- accuracy_holt[10]
+mse_holt <- mean(abs((test_arrival - method_holt$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt),
+                       MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt),
+                       MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mape_holt))
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK HOLT-WINTERS METHOD WITH DAMPING
+
+arr_mult <- decompose(training_arrival, type="multiplicative")
+plot(arr_mult)
+
+#forecast
+method_mult_damped_hw <- hw(training_arrival, h=36, seasonal="multiplicative", damped=TRUE)
+summary(method_mult_damped_hw$model)
+plot(method_mult_damped_hw$model)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(method_mult_damped_hw$model)
+accuracy_mult_damped_hw <- accuracy(method_mult_damped_hw, test_arrival)
+accuracy_mult_damped_hw
+rmse_mult_damped_hw <- accuracy_mult_damped_hw[4]
+mape_mult_damped_hw <- accuracy_mult_damped_hw[10]
+mse_mult_damped_hw <- mean(abs((test_arrival - method_mult_damped_hw$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw),
+                       MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw),
+                       MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw))
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - ANA (Seasonal Naive)
+#Error type: Additive
+#Trend type: None
+#Season type: Additive
+
+#forecast
+model_ets_1 <- ets(training_arrival, model="ANA", lambda=auto_lambda)
+fcast_ets_1 <- forecast(model_ets_1, h=48)
+summary(model_ets_1)
+plot(fcast_ets_1)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_ets_1)
+accuracy_ets_1 <- accuracy(fcast_ets_1, test_arrival)
+accuracy_ets_1
+rmse_ets_1 <- accuracy_ets_1[4]
+mape_ets_1 <- accuracy_ets_1[10]
+mse_ets_1 <- mean(abs((test_arrival - fcast_ets_1$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - AAN (exponential smoothing)
+#Error type: Additive
+#Trend type: Additive
+#Season type: None
+
+#forecast
+model_ets_2 <- ets(training_arrival, model="AAN", damped=FALSE, lambda=auto_lambda)
+fcast_ets_2 <- forecast(model_ets_2, h=48)
+summary(model_ets_2$model)
+plot(fcast_ets_2)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_ets_2)
+accuracy_ets_2 <- accuracy(fcast_ets_2, test_arrival)
+accuracy_ets_2
+rmse_ets_2 <- accuracy_ets_2[4]
+mape_ets_2 <- accuracy_ets_2[10]
+mse_ets_2 <- mean(abs((test_arrival - fcast_ets_2$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA", "model:ETS - AAN"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1, rmse_ets_2),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1, mape_ets_2),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1, mse_ets_2))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - MAM
+#Error type: Multiplicative
+#Trend type: Additive
+#Season type: Multiplicatice
+
+#forecast
+model_ets_3 <- ets(training_arrival, model="MAM")
+fcast_ets_3 <- forecast(model_ets_3, h=48)
+summary(model_ets_3$model)
+plot(fcast_ets_3)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_ets_3)
+accuracy_ets_3 <- accuracy(fcast_ets_3, test_arrival)
+accuracy_ets_3
+rmse_ets_3 <- accuracy_ets_3[4]
+mape_ets_3 <- accuracy_ets_3[10]
+mse_ets_3 <- mean(abs((test_arrival - fcast_ets_3$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA", "model:ETS - AAN", "model:ETS - MAM"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1, rmse_ets_2, rmse_ets_3),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1, mape_ets_2, mape_ets_3),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1, mse_ets_2, mse_ets_3))
+
+compare_accuracy
+
+```
+
+```{r}
+#BENCHMARK ETS MODEL - ZZZ
+#Error type: Automatically selected
+#Trend type: Automatically selected
+#Season type: Automatically selected
+
+#forecast
+model_ets_4 <- ets(training_arrival, model="ZZZ", lambda = auto_lambda)
+fcast_ets_4 <- forecast(model_ets_4, h=48)
+summary(model_ets_4$model)
+plot(fcast_ets_4)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_ets_4)
+accuracy_ets_4 <- accuracy(fcast_ets_4, test_arrival)
+accuracy_ets_4
+rmse_ets_4 <- accuracy_ets_4[4]
+mape_ets_4 <- accuracy_ets_4[10]
+mse_ets_4 <- mean(abs((test_arrival - fcast_ets_4$mean))^2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA", "model:ETS - AAN", "model:ETS - MAM", "model:ETS - automatic"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1, mse_ets_2, mse_ets_3, rmse_ets_4))
+
+compare_accuracy
+```
+
+```{r}
+arrival %>% mstl(lambda = auto_lambda) %>% autoplot()
+model_tbats <- tbats(training_arrival)
+print(model_tbats)
+
+#forecast
+fcast_tbats <- forecast(model_tbats, h=48)
+plot(fcast_tbats)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_tbats)
+accuracy_tbats <- accuracy(fcast_tbats, test_arrival)
+accuracy_tbats
+rmse_tbats <- accuracy_tbats[4]
+mape_tbats <- accuracy_tbats[10]
+mse_tbats <- mean(abs((test_arrival - fcast_tbats$mean))^2)
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA", "model:ETS - AAN", "model:ETS - MAM", "model:ETS - automatic", "model: TBATS"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_tbats),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1, mape_ets_2, mape_ets_3, rmse_ets_4, mape_tbats),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1, mse_ets_2, mse_ets_3, rmse_ets_4, mse_tbats))
+
+compare_accuracy
+
+```
+
+
+```{r}
+arrival %>% mstl(lambda = auto_lambda) %>% autoplot()
+model_tbats <- tbats(training_arrival, use.box.cox=TRUE, use.trend = TRUE, max.p=3, max.q=3, use.arma.errors=TRUE)
+print(model_tbats)
+
+#forecast
+fcast_tbats <- forecast(model_tbats, h=48)
+plot(fcast_tbats)
+lines(test_arrival, type = "l", col = "red")
+
+#forecast
+checkresiduals(fcast_tbats)
+accuracy_tbats <- accuracy(fcast_tbats, test_arrival)
+accuracy_tbats
+rmse_tbats <- accuracy_tbats[4]
+mape_tbats <- accuracy_tbats[10]
+mse_tbats <- mean(abs((test_arrival - fcast_tbats$mean))^2)
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("method: seasonal naive", "method: holt-winters", "method: simple exponential smoothing", "method: holt", "method: holt-winters - damped", "model:ETS - ANA", "model:ETS - AAN", "model:ETS - MAM", "model:ETS - automatic", "model: TBATS"),
+                               RMSE = c(rmse_seasonal_naive, rmse_mult_nodamped_hw,rmse_ses,rmse_holt, rmse_mult_damped_hw, rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_tbats),
+                               MAPE = c(mape_seasonal_naive, mape_mult_nodamped_hw, mape_ses, mape_holt, mape_mult_damped_hw, mape_ets_1, mape_ets_2, mape_ets_3, rmse_ets_4, mape_tbats),
+                               MSE = c(mse_seasonal_naive, mse_mult_nodamped_hw, mse_ses, mse_holt, mse_mult_damped_hw, mse_ets_1, mse_ets_2, mse_ets_3, rmse_ets_4, mse_tbats))
+
+compare_accuracy
+```
+

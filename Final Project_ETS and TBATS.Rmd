@@ -1,0 +1,698 @@
+---
+title: "Final Project ETS and TBATS"
+output: html_document
+date: "2023-11-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Clear working memory
+rm(list=ls())
+
+library(tidyverse)
+library(fpp)
+library(tseries)
+library(ggplot2)
+library(forecast)
+library(plotly)
+library(readxl)
+library(xts)
+library(TSA)
+```
+
+```{r}
+# set directory
+#C:/Users/nugra/OneDrive - The University of Chicago/UChicago/Time Series HW/Final Project
+
+setwd('C:/Users/Shofi/Desktop/Fall 2023/ADSP 31006 - Time Series Analysis and Forecasting/Final Project/forecast-tourist-arrival')
+getwd()
+```
+
+```{r}
+# LOAD THE DATA
+df_arrival <-read_xlsx('arrival.xlsx')
+
+head(df_arrival)
+
+# CREATING TIME SERIES DATA
+arrival <- ts(df_arrival$arrival, start = c(2000,1), frequency = 12)
+head(arrival)
+
+gfc <- ts(df_arrival$gfc, start = c(2000,1), frequency = 12)
+globcci <- ts(df_arrival$globcci, start = c(2000,1), frequency = 12)
+geopol <- ts(df_arrival$geopol, start = c(2000,1), frequency = 12)
+oil <- ts(df_arrival$oil, start = c(2000,1), frequency = 12)
+sars <- ts(df_arrival$sars, start = c(2000,1), frequency = 12)
+gfc_0809 <- ts(df_arrival$gfc_0809, start = c(2000,1), frequency = 12)
+
+# PLOTTING
+autoplot(arrival, main = "Monthly Tourist Arrival in Indonesia, January 2000 - December 2019", 
+         ylab = "Tourist Arrival", xlab = "Year")
+
+seasonplot(arrival, main = "Seasonal Plot of Tourist Arrival Indonesia, 
+           January 2000 - December 2019")
+
+```
+
+```{r}
+# CHECKING THE NORMALITY
+hist(arrival, main = "Histogram of Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2019")
+
+shapiro.test(arrival)
+```
+
+```{r}
+# CUT AND SPLIT THE DATA
+training_arrival <- window(arrival,  start = c(2000,1), end = c(2015,12))
+test_arrival <- window(arrival, start= c(2016,1), end = c(2019,12))
+
+training_geopol <- window(geopol,  start = c(2000,1), end = c(2015,12))
+test_geopol <- window(geopol, start= c(2016,1), end = c(2019,12))
+
+training_gfc <- window(gfc,  start = c(2000,1), end = c(2015,12))
+test_gfc <- window(gfc, start= c(2016,1), end = c(2019,12))
+
+training_gfc_0809 <- window(gfc_0809,  start = c(2000,1), end = c(2015,12))
+test_gfc_0809 <- window(gfc_0809, start= c(2016,1), end = c(2019,12))
+
+training_globcci <- window(globcci,  start = c(2000,1), end = c(2015,12))
+test_globcci <- window(globcci, start= c(2016,1), end = c(2019,12))
+
+training_oil <- window(oil,  start = c(2000,1), end = c(2015,12))
+test_oil <- window(oil, start= c(2016,1), end = c(2019,12))
+
+training_sars <- window(sars,  start = c(2000,1), end = c(2015,12))
+test_sars <- window(sars, start= c(2016,1), end = c(2019,12))
+
+autoplot(training_arrival)
+autoplot(test_arrival)
+
+seasonplot(training_arrival)
+
+# CHECKING THE NORMALITY
+hist(training_arrival, main = "Histogram of Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2015")
+
+shapiro.test(training_arrival)
+
+# CHECKING STATIONARITY
+tsdisplay(training_arrival, main = "ACF and PACF for Foreign Tourists Arrival in Indonesia,
+     January 2000 - December 2015")
+
+acf(training_arrival)
+pacf(training_arrival)
+kpss.test(training_arrival)
+adf.test(training_arrival)
+
+
+```
+
+```{r}
+# BOX COX TRANSFORMATION
+auto_lambda <- BoxCox.lambda(training_arrival)
+auto_lambda
+
+training_arrival_bcauto <- BoxCox(training_arrival,auto_lambda)
+plot(training_arrival_bcauto)
+hist(training_arrival_bcauto)
+shapiro.test(training_arrival_bcauto)
+kpss.test(training_arrival_bcauto, null=c("Level"))
+
+acf(training_arrival_bcauto)
+pacf(training_arrival_bcauto)
+eacf(training_arrival_bcauto)
+```
+
+```{r}
+#####################################################CHANGE
+#detrending -> data after boxcox
+training_arrival_bc_detrend <- diff(training_arrival_bcauto, differences=1)
+plot(training_arrival_bc_detrend, type="l")
+kpss.test(training_arrival_bc_detrend, null=c("Level"))
+tsdisplay(training_arrival_bc_detrend)
+
+```
+
+
+```{r}
+#BENCHMARK ETS MODEL - ANA (Seasonal Naive)
+#Error type: Additive
+#Trend type: None
+#Season type: Additive
+
+#model
+model_ets_1 <- ets(training_arrival, model="ANA", lambda = 0)
+fcast_ets_1 <- forecast(model_ets_1, h=48)
+summary(model_ets_1)
+aicc_ets_1 <- model_ets_1$aicc
+bic_ets_1 <- model_ets_1$bic
+checkresiduals(model_ets_1)
+
+#accuracy forecast
+accuracy_ets_1 <- accuracy(fcast_ets_1, test_arrival)
+accuracy_ets_1
+rmse_ets_1 <- accuracy_ets_1[4]
+mape_ets_1 <- accuracy_ets_1[10]
+mse_ets_1 <- mean(abs((test_arrival - fcast_ets_1$mean))^2)
+
+#plot
+max_test_arrival <- max(test_arrival)
+min_value <- min(training_arrival)
+custom_y_limits <- c(min_value, max_test_arrival)
+plot(fcast_ets_1, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA"),
+                               AIC = c(aicc_ets_1),
+                               BIC = c(bic_ets_1),
+                               RMSE = c(rmse_ets_1),
+                               MAPE = c(mape_ets_1),
+                               MSE = c(mse_ets_1))
+
+compare_accuracy
+```
+```{r}
+#BENCHMARK ETS MODEL - AAN (naive)
+#Error type: Additive
+#Trend type: Additive
+#Season type: None
+
+#model
+model_ets_2 <- ets(training_arrival, model="AAN", lambda = 0)
+fcast_ets_2 <- forecast(model_ets_2, h=48)
+summary(model_ets_2)
+aicc_ets_2 <- model_ets_2$aicc
+bic_ets_2 <- model_ets_2$bic
+
+checkresiduals(model_ets_2)
+
+#accuracy forecast
+accuracy_ets_2 <- accuracy(fcast_ets_2, test_arrival)
+accuracy_ets_2
+rmse_ets_2 <- accuracy_ets_2[4]
+mape_ets_2 <- accuracy_ets_2[10]
+mse_ets_2 <- mean(abs((test_arrival - fcast_ets_2$mean))^2)
+
+#plot
+plot(fcast_ets_2, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN"),
+                               AIC = c(aicc_ets_1, aicc_ets_2),
+                               BIC = c(bic_ets_1, bic_ets_2),
+                               RMSE = c(rmse_ets_1, rmse_ets_2),
+                               MAPE = c(mape_ets_1, mape_ets_2),
+                               MSE = c(mse_ets_1, mse_ets_2))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - AAA
+#Error type: Additive
+#Trend type: Additive
+#Season type: Additive
+
+#model
+model_ets_3 <- ets(training_arrival, model="AAA", lambda = 0)
+fcast_ets_3 <- forecast(model_ets_3, h=48)
+summary(model_ets_3)
+aicc_ets_3 <- model_ets_3$aicc
+bic_ets_3 <- model_ets_3$bic
+
+checkresiduals(model_ets_3)
+
+#accuracy forecast
+accuracy_ets_3 <- accuracy(fcast_ets_3, test_arrival)
+accuracy_ets_3
+rmse_ets_3 <- accuracy_ets_3[4]
+mape_ets_3 <- accuracy_ets_3[10]
+mse_ets_3 <- mean(abs((test_arrival - fcast_ets_3$mean))^2)
+
+#plot
+plot(fcast_ets_3, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3))
+
+compare_accuracy
+```
+```{r}
+#BENCHMARK ETS MODEL - MAM
+#Error type: Multiplicative
+#Trend type: Additive
+#Season type: Multiplicative
+
+#model
+model_ets_4 <- ets(training_arrival, model="MAM")
+fcast_ets_4 <- forecast(model_ets_4, h=48)
+summary(model_ets_4)
+aicc_ets_4 <- model_ets_4$aicc
+bic_ets_4 <- model_ets_4$bic
+
+#accuracy forecast
+checkresiduals(fcast_ets_4)
+accuracy_ets_4 <- accuracy(fcast_ets_4, test_arrival)
+accuracy_ets_4
+rmse_ets_4 <- accuracy_ets_4[4]
+mape_ets_4 <- accuracy_ets_4[10]
+mse_ets_4 <- mean(abs((test_arrival - fcast_ets_4$mean))^2)
+
+#plot
+plot(fcast_ets_4, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA", "model: ETS - MAM"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3, aicc_ets_4),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3, bic_ets_4),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3, mse_ets_4))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - MAA
+#Error type: Multiplicative
+#Trend type: Additive
+#Season type: Additive
+
+#model
+model_ets_5 <- ets(training_arrival, model="MAA")
+fcast_ets_5 <- forecast(model_ets_5, h=48)
+summary(model_ets_5)
+aicc_ets_5 <- model_ets_5$aicc
+bic_ets_5 <- model_ets_5$bic
+
+#accuracy forecast
+checkresiduals(fcast_ets_5)
+accuracy_ets_5 <- accuracy(fcast_ets_5, test_arrival)
+accuracy_ets_5
+rmse_ets_5 <- accuracy_ets_5[4]
+mape_ets_5 <- accuracy_ets_5[10]
+mse_ets_5 <- mean(abs((test_arrival - fcast_ets_5$mean))^2)
+
+#plot
+plot(fcast_ets_5, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA", "model: ETS - MAM", "model: ETS - MAA"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3, aicc_ets_4, aicc_ets_5),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3, bic_ets_4, bic_ets_5),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_ets_5),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4, mape_ets_5),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3, mse_ets_4, mse_ets_5))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - ANN
+#Error type: Additive
+#Trend type: None
+#Season type: None
+
+#model
+model_ets_6 <- ets(training_arrival, model="ANN", lambda = 0)
+fcast_ets_6 <- forecast(model_ets_6, h=48)
+summary(model_ets_6)
+aicc_ets_6 <- model_ets_6$aicc
+bic_ets_6 <- model_ets_6$bic
+checkresiduals(model_ets_6)
+
+#accuracy forecast
+accuracy_ets_6 <- accuracy(fcast_ets_6, test_arrival)
+accuracy_ets_6
+rmse_ets_6 <- accuracy_ets_6[4]
+mape_ets_6 <- accuracy_ets_6[10]
+mse_ets_6 <- mean(abs((test_arrival - fcast_ets_6$mean))^2)
+
+#plot
+plot(fcast_ets_6, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA", "model: ETS - MAM", "model: ETS - MAA", "model: ETS: ANN"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3, aicc_ets_4, aicc_ets_5, aicc_ets_6),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3, bic_ets_4, bic_ets_5, bic_ets_6),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_ets_5, rmse_ets_6),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4, mape_ets_5, mape_ets_6),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3, mse_ets_4, mse_ets_5, mse_ets_6))
+
+compare_accuracy
+```
+```{r}
+#BENCHMARK ETS MODEL - MMN
+#Error type: Multiplicative
+#Trend type: Multiplicative
+#Season type: None
+
+#model
+model_ets_7 <- ets(training_arrival, model="MMN")
+fcast_ets_7 <- forecast(model_ets_7, h=48)
+summary(model_ets_7)
+aicc_ets_7 <- model_ets_7$aicc
+bic_ets_7 <- model_ets_7$bic
+
+#accuracy forecast
+checkresiduals(fcast_ets_7)
+accuracy_ets_7 <- accuracy(fcast_ets_7, test_arrival)
+accuracy_ets_7
+rmse_ets_7 <- accuracy_ets_7[4]
+mape_ets_7 <- accuracy_ets_7[10]
+mse_ets_7 <- mean(abs((test_arrival - fcast_ets_7$mean))^2)
+
+#plot
+plot(fcast_ets_7, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA",
+                                         "model: ETS - MAM", "model: ETS - MAA", "model: ETS: ANN",
+                                         "model: ETS: MMN"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3, aicc_ets_4, aicc_ets_5, aicc_ets_6, aicc_ets_7),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3, bic_ets_4, bic_ets_5, bic_ets_6, bic_ets_7),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_ets_5, rmse_ets_6, rmse_ets_7),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4, mape_ets_5, mape_ets_6, mape_ets_7),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3, mse_ets_4, mse_ets_5, mse_ets_6, mse_ets_7))
+
+compare_accuracy
+```
+
+```{r}
+#BENCHMARK ETS MODEL - MMA
+#Error type: Multiplicative
+#Trend type: Multiplicative
+#Season type: None
+
+#model
+model_ets_8 <- ets(training_arrival, model="ZZZ", lambda = 0)
+fcast_ets_8 <- forecast(model_ets_8, h=48)
+summary(model_ets_8)
+aicc_ets_8 <- model_ets_8$aicc
+bic_ets_8 <- model_ets_8$bic
+checkresiduals(model_ets_8)
+
+#plot
+plot(model_ets_8$fitted, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Fitted Plot", ylim = custom_y_limits)
+lines(training_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Fitted", "Actual"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#accuracy forecast
+accuracy_ets_8 <- accuracy(fcast_ets_8, test_arrival)
+accuracy_ets_8
+rmse_ets_8 <- accuracy_ets_8[4]
+mape_ets_8 <- accuracy_ets_8[10]
+mse_ets_8 <- mean(abs((test_arrival - fcast_ets_8$mean))^2)
+
+#plot
+plot(fcast_ets_8, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model:ETS - ANA", "model: ETS - AAN", "model: ETS - AAA",
+                                         "model: ETS - MAM", "model: ETS - MAA", "model: ETS: ANN",
+                                         "model: ETS: MMN", "model: ETS: Autoselected"),
+                               AIC = c(aicc_ets_1, aicc_ets_2, aicc_ets_3, aicc_ets_4, aicc_ets_5, aicc_ets_6, aicc_ets_7, aicc_ets_8),
+                               BIC = c(bic_ets_1, bic_ets_2, bic_ets_3, bic_ets_4, bic_ets_5, bic_ets_6, bic_ets_7, bic_ets_8),
+                               RMSE = c(rmse_ets_1, rmse_ets_2, rmse_ets_3, rmse_ets_4, rmse_ets_5, rmse_ets_6, rmse_ets_7, rmse_ets_8),
+                               MAPE = c(mape_ets_1, mape_ets_2, mape_ets_3, mape_ets_4, mape_ets_5, mape_ets_6, mape_ets_7, mape_ets_8),
+                               MSE = c(mse_ets_1, mse_ets_2, mse_ets_3, mse_ets_4, mse_ets_5, mse_ets_6, mse_ets_7, mse_ets_8))
+
+compare_accuracy
+```
+
+```{r}
+#forecast
+model_tbats_1 <- tbats(training_arrival, trace = TRUE, use.box.cox = TRUE, use.trend = TRUE)
+print(model_tbats_1)
+aic_tbats_1 <- model_tbats_1$AIC
+fcast_tbats_1 <- forecast(model_tbats_1, h=48)
+checkresiduals(model_tbats_1)
+
+
+#plot
+plot(model_tbats_1$fitted, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Fitted Plot", ylim = custom_y_limits)
+lines(training_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Fitted", "Actual"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#forecast
+accuracy_tbats_1 <- accuracy(fcast_tbats_1, test_arrival)
+accuracy_tbats_1
+rmse_tbats_1 <- accuracy_tbats_1[4]
+mape_tbats_1 <- accuracy_tbats_1[10]
+mse_tbats_1 <- mean(abs((test_arrival - fcast_tbats_1$mean))^2)
+
+#plot
+plot(fcast_tbats_1, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model: TBATS 1"),
+                               AIC = c(aic_tbats_1),
+                               RMSE = c(rmse_tbats_1),
+                               MAPE = c(mape_tbats_1),
+                               MSE = c(mse_tbats_1))
+
+compare_accuracy
+```
+
+```{r}
+#forecast
+model_tbats_2 <- tbats(log(training_arrival))
+print(model_tbats_2)
+aic_tbats_2 <- model_tbats_2$AIC
+fcast_tbats_2 <- forecast(model_tbats_2, h=48)
+
+#forecast
+checkresiduals(fcast_tbats_2)
+accuracy_tbats_2 <- accuracy(fcast_tbats_2, log(test_arrival))
+accuracy_tbats_2
+rmse_tbats_2 <- accuracy_tbats_2[4]
+mape_tbats_2 <- accuracy_tbats_2[10]
+mse_tbats_2 <- mean(abs((log(test_arrival) - fcast_tbats_2$mean))^2)
+
+#plot
+plot(fcast_tbats_2, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot")
+lines(log(test_arrival), type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model: TBATS 1", "model: TBATS 2"),
+                               AIC = c(aic_tbats_1, aic_tbats_2),
+                               RMSE = c(rmse_tbats_1, rmse_tbats_2),
+                               MAPE = c(mape_tbats_1, mape_tbats_2),
+                               MSE = c(mse_tbats_1, mse_tbats_2))
+
+compare_accuracy
+```
+
+
+
+
+```{r}
+#forecast
+model_nnetar_1 <- nnetar(training_arrival, lambda = "auto")
+print(model_nnetar_1)
+fcast_nnetar_1 <- forecast(model_nnetar_1, h=48)
+
+#forecast
+checkresiduals(fcast_nnetar_1)
+accuracy_nnetar_1 <- accuracy(fcast_nnetar_1, test_arrival)
+accuracy_nnetar_1
+rmse_nnetar_1 <- accuracy_nnetar_1[4]
+mape_nnetar_1 <- accuracy_nnetar_1[10]
+mse_nnetar_1 <- mean(abs((test_arrival - fcast_nnetar_1$mean))^2)
+
+#plot
+plot(fcast_nnetar_1, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model: TBATS 1", "model: TBATS 2", "model: NNETAR"),
+                               RMSE = c(rmse_tbats_1, rmse_tbats_2, rmse_nnetar_1),
+                               MAPE = c(mape_tbats_1, mape_tbats_2, mape_nnetar_1),
+                               MSE = c(mse_tbats_1, mse_tbats_2, mse_nnetar_1))
+
+compare_accuracy
+```
+```{r}
+#forecast
+model_nnetar_2 <- nnetar(training_arrival, lambda = "auto", p = 3)
+print(model_nnetar_2)
+fcast_nnetar_2 <- forecast(model_nnetar_2, h=48)
+
+#forecast
+checkresiduals(fcast_nnetar_2)
+accuracy_nnetar_2 <- accuracy(fcast_nnetar_2, test_arrival)
+accuracy_nnetar_2
+rmse_nnetar_2 <- accuracy_nnetar_2[4]
+mape_nnetar_2 <- accuracy_nnetar_2[10]
+mse_nnetar_2 <- mean(abs((test_arrival - fcast_nnetar_2$mean))^2)
+
+#plot
+plot(fcast_nnetar_2, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model: TBATS 1", "model: TBATS 2", "model: NNETAR 1", "model NNETAR 2"),
+                               RMSE = c(rmse_tbats_1, rmse_tbats_2, rmse_nnetar_1, rmse_nnetar_2),
+                               MAPE = c(mape_tbats_1, mape_tbats_2, mape_nnetar_1, mape_nnetar_2),
+                               MSE = c(mse_tbats_1, mse_tbats_2, mse_nnetar_1, mse_nnetar_2))
+
+compare_accuracy
+```
+```{r}
+#forecast
+model_nnetar_2 <- nnetar(training_arrival, lambda = "auto", p = 3, P = 6)
+print(model_nnetar_2)
+fcast_nnetar_2 <- forecast(model_nnetar_2, h=48)
+
+#forecast
+checkresiduals(fcast_nnetar_2)
+accuracy_nnetar_2 <- accuracy(fcast_nnetar_2, test_arrival)
+accuracy_nnetar_2
+rmse_nnetar_2 <- accuracy_nnetar_2[4]
+mape_nnetar_2 <- accuracy_nnetar_2[10]
+mse_nnetar_2 <- mean(abs((test_arrival - fcast_nnetar_2$mean))^2)
+
+#plot
+plot(fcast_nnetar_2, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+
+
+#Comparison
+compare_accuracy <- data.frame(Model = c("model: TBATS 1", "model: TBATS 2", "model: NNETAR 1", "model NNETAR 2"),
+                               RMSE = c(rmse_tbats_1, rmse_tbats_2, rmse_nnetar_1, rmse_nnetar_2),
+                               MAPE = c(mape_tbats_1, mape_tbats_2, mape_nnetar_1, mape_nnetar_2),
+                               MSE = c(mse_tbats_1, mse_tbats_2, mse_nnetar_1, mse_nnetar_2))
+
+compare_accuracy
+```
+```{r}
+length(training_arrival)
+length(training_sars)
+length(training_gfc)
+xreg_combined <- training_sars + training_gfc
+xreg_combined
+```
+
+
+```{r}
+# Intervensi
+arrival_intervention <- auto.arima(training_arrival, lambda = 0, xreg = training_sars)
+
+print(arrival_intervention)
+aicc_arrival_intervention <- arrival_intervention$AICc
+bic_arrival_intervention <- arrival_intervention$bic
+
+fcast_arrival_intervention <- forecast(arrival_intervention , h=48, xreg=test_sars)
+arrival_intervention
+checkresiduals(arrival_intervention)
+
+
+#plot
+plot(arrival_intervention$fitted, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Fitted Plot", ylim = custom_y_limits)
+lines(training_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Fitted", "Actual"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#forecast
+accuracy_fcast_arrival_intervention <- accuracy(fcast_arrival_intervention, test_arrival)
+accuracy_fcast_arrival_intervention
+rmse_fcast_arrival_intervention <- accuracy_fcast_arrival_intervention[4]
+mape_fcast_arrival_intervention <- accuracy_fcast_arrival_intervention[10]
+mse_fcast_arrival_intervention <- mean(abs((test_arrival - fcast_arrival_intervention$mean))^2)
+
+#plot
+plot(fcast_arrival_intervention, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+```
+
+```{r}
+# Intervensi
+arrival_intervention <- auto.arima(training_arrival, lambda = 0, xreg = training_gfc_0809)
+
+print(arrival_intervention)
+aicc_arrival_intervention <- arrival_intervention$AICc
+bic_arrival_intervention <- arrival_intervention$bic
+
+fcast_arrival_intervention <- forecast(arrival_intervention , h=48, xreg=test_gfc_0809)
+arrival_intervention
+checkresiduals(arrival_intervention)
+
+
+#plot
+plot(arrival_intervention$fitted, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Fitted Plot", ylim = custom_y_limits)
+lines(training_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Fitted", "Actual"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+#forecast
+accuracy_fcast_arrival_intervention <- accuracy(fcast_arrival_intervention, test_arrival)
+accuracy_fcast_arrival_intervention
+rmse_fcast_arrival_intervention <- accuracy_fcast_arrival_intervention[4]
+mape_fcast_arrival_intervention <- accuracy_fcast_arrival_intervention[10]
+mse_fcast_arrival_intervention <- mean(abs((test_arrival - fcast_arrival_intervention$mean))^2)
+
+#plot
+plot(fcast_arrival_intervention, type = "l", col = "blue", lwd = 2, xlab = "Time", ylab = "Values", main = "Forecast Plot", ylim = custom_y_limits)
+lines(test_arrival, type = "l", col = "red", lwd = 2)
+grid()
+legend("topleft", legend = c("Forecast", "Test Arrival"), col = c("blue", "red"), lty = 1, lwd = 2)
+
+```

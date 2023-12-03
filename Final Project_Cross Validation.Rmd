@@ -248,10 +248,6 @@ mae_3 <- matrix(NA,n-k,H)
 mae_4 <- matrix(NA,n-k,H)
 mae_5 <- matrix(NA,n-k,H)
 mae_6 <- matrix(NA,n-k,H)
-mae_7 <- matrix(NA,n-k,H)
-mae_8 <- matrix(NA,n-k,H)
-mae_9 <- matrix(NA,n-k,H)
-mae_10 <- matrix(NA,n-k,H)
 
 rmse_1 <- matrix(NA,n-k,H)
 rmse_2 <- matrix(NA,n-k,H)
@@ -259,10 +255,6 @@ rmse_3 <- matrix(NA,n-k,H)
 rmse_4 <- matrix(NA,n-k,H)
 rmse_5 <- matrix(NA,n-k,H)
 rmse_6 <- matrix(NA,n-k,H)
-rmse_7 <- matrix(NA,n-k,H)
-rmse_8 <- matrix(NA,n-k,H)
-rmse_9 <- matrix(NA,n-k,H)
-rmse_10 <- matrix(NA,n-k,H)
 
 AICc_1 <- matrix(NA,n-k,H)
 AICc_2 <- matrix(NA,n-k,H)
@@ -270,10 +262,6 @@ AICc_3 <- matrix(NA,n-k,H)
 AICc_4 <- matrix(NA,n-k,H)
 AICc_5 <- matrix(NA,n-k,H)
 AICc_6 <- matrix(NA,n-k,H)
-AICc_7 <- matrix(NA,n-k,H)
-AICc_8 <- matrix(NA,n-k,H)
-AICc_9 <- matrix(NA,n-k,H)
-AICc_10 <- matrix(NA,n-k,H)
 
 for(i in 1:(n-k))
 {
@@ -337,39 +325,6 @@ for(i in 1:(n-k))
   AICc_6[i,1:length(test)] <- fit_6$aicc #AICc 
   mae_6[i,1:length(test)] <- abs(fcast_6[['mean']]-test) #MAE
   rmse_6[i,1:length(test)] <- sqrt(mean((fcast_6[['mean']]-test)^2)) #RMSE
-
-  ### ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO
-  #### EXPANDING TRAINING WINDOW
-  fit_7 <- Arima(train_1, order=c(1,1,0), seasonal=list(order=c(1,1,1)), lambda = "auto") #MODEL
-  fcast_7 <- forecast(fit_7, h=H)
-  AICc_7[i,1:length(test)] <- fit_7$aicc
-  mae_7[i,1:length(test)] <- abs(fcast_7[['mean']]-test)
-  rmse_7[i,1:length(test)] <- sqrt(mean((fcast_7[['mean']]-test)^2)) #RMSE
-  
-  ### ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO
-  #### SLIDING TRAINING WINDOW
-  fit_8 <- Arima(train_2, order=c(1,1,0), seasonal=list(order=c(1,1,1)), lambda = "auto") #MODEL
-  fcast_8 <- forecast(fit_8, h=H) #FORECAST
-  AICc_8[i,1:length(test)] <- fit_8$aicc #AICc
-  mae_8[i,1:length(test)] <- abs(fcast_8[['mean']]-test) #MAE
-  rmse_8[i,1:length(test)] <- sqrt(mean((fcast_8[['mean']]-test)^2)) #RMSE
-  
-  ### ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0
-  #### EXPANDING TRAINING WINDOW
-  fit_9 <- Arima(train_1, order=c(1,1,0), seasonal=list(order=c(1,1,1)), lambda = 0) #MODEL
-  fcast_9 <- forecast(fit_9, h=H)
-  AICc_9[i,1:length(test)] <- fit_9$aicc
-  mae_9[i,1:length(test)] <- abs(fcast_9[['mean']]-test)
-  rmse_9[i,1:length(test)] <- sqrt(mean((fcast_9[['mean']]-test)^2)) #RMSE
-  
-  ### ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0
-  #### SLIDING TRAINING WINDOW
-  fit_10 <- Arima(train_2, order=c(1,1,0), seasonal=list(order=c(1,1,1)), lambda = 0) #MODEL
-  fcast_10 <- forecast(fit_10, h=H) #FORECAST
-  AICc_10[i,1:length(test)] <- fit_10$aicc #AICc
-  mae_10[i,1:length(test)] <- abs(fcast_10[['mean']]-test) #MAE
-  rmse_10[i,1:length(test)] <- sqrt(mean((fcast_10[['mean']]-test)^2)) #RMSE
-  
     
 }
 ```
@@ -377,29 +332,20 @@ for(i in 1:(n-k))
 ![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAaCAYAAADFTB7LAAAAa0lEQVR42u3OywnAIBBAwcXSUoCW5D11xDoNCBGNv0MOecJOBSOi1OZMsJ4dvFxEJ1OQnMxBarIKEpNNkJbsBknJYZCSnAYJyVVQziNig7/nZkFEbhTE5HpBVO4dxOXKIDL3BLG5BJ1T6rsbMfep2CaMN00AAAAASUVORK5CYII= "Run Current Chunk")
 
 ```{r}
-par(mar=c(3,3,3,3))
 plot(1:48, colMeans(mae_1, na.rm=TRUE), type="l", 
-     main = "MAE vs forecast horizon plots", xlab='Forecast Horizon Plots', ylab='MAE')
+     main = "MAE vs forecast horizon plots", xlab='Forecast Horizon Plots', ylab='MAE',ylim=c(50000,450000))
 lines(1:48, colMeans(mae_2,na.rm=TRUE), type="l",col=2)
 lines(1:48, colMeans(mae_3,na.rm=TRUE), type="l",col=3)
 lines(1:48, colMeans(mae_4,na.rm=TRUE), type="l",col=4)
 lines(1:48, colMeans(mae_5,na.rm=TRUE), type="l",col=5)
 lines(1:48, colMeans(mae_6,na.rm=TRUE), type="l",col=6)
-lines(1:48, colMeans(mae_7,na.rm=TRUE), type="l",col=7)
-lines(1:48, colMeans(mae_8,na.rm=TRUE), type="l",col=8)
-lines(1:48, colMeans(mae_9,na.rm=TRUE), type="l",col=9)
-lines(1:48, colMeans(mae_10,na.rm=TRUE), type="l",col=10)
-legend("topright",legend=c("ETS: 0 - EXPANDING",
+legend("topleft",legend=c("ETS: 0 - EXPANDING",
                           "ETS: 0 - SLIDING",
                           "ARIMA(0,1,1)(1,1,2)[12] LAMBDA AUTO - EXPANDING",
                           "ARIMA(0,1,1)(1,1,2)[12] LAMBDA AUTO - SLIDING",
                           "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - EXPANDING",
-                          "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - SLIDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO - EXPANDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO - SLIDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0 - EXPANDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0 - SLIDING"),
-       col=1:10, lty=1, xpd=TRUE, y.intersp = 1, cex=0.8,inset=c(-0.02, 0.02))
+                          "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - SLIDING"),
+       col=1:6, lty=1, cex=0.7)
 ```
 
 Out of all models, Seasonal ARIMA with sliding window has the lowest Mean Absolute Error, indicating it is the Seasonal ARIMA with sliding window is the most accurate model to make predictions.
@@ -410,60 +356,18 @@ For all models, Mean Absolute Forecast Error increases over forecast horizon, so
 
 ```{r}
 plot(1:48, colMeans(rmse_1,na.rm=TRUE), type="l", 
-     main = "RMSE vs forecast horizon plots", xlab='Forecast Horizon Plots', ylab='RMSE')
+     main = "RMSE vs forecast horizon plots", xlab='Forecast Horizon Plots', ylab='RMSE',ylim=c(100000,350000))
 lines(1:48, colMeans(rmse_2,na.rm=TRUE), type="l",col=2)
 lines(1:48, colMeans(rmse_3,na.rm=TRUE), type="l",col=3)
 lines(1:48, colMeans(rmse_4,na.rm=TRUE), type="l",col=4)
 lines(1:48, colMeans(rmse_5,na.rm=TRUE), type="l",col=5)
 lines(1:48, colMeans(rmse_6,na.rm=TRUE), type="l",col=6)
-lines(1:48, colMeans(rmse_7,na.rm=TRUE), type="l",col=7)
-lines(1:48, colMeans(rmse_8,na.rm=TRUE), type="l",col=8)
-lines(1:48, colMeans(rmse_9,na.rm=TRUE), type="l",col=9)
-lines(1:48, colMeans(rmse_10,na.rm=TRUE), type="l",col=10)
-legend("topright",legend=c("ETS: 0 - EXPANDING",
+legend("topleft",legend=c("ETS: 0 - EXPANDING",
                           "ETS: 0 - SLIDING",
                           "ARIMA(0,1,1)(1,1,2)[12] LAMBDA AUTO - EXPANDING",
                           "ARIMA(0,1,1)(1,1,2)[12] LAMBDA AUTO - SLIDING",
                           "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - EXPANDING",
-                          "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - SLIDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO - EXPANDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA AUTO - SLIDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0 - EXPANDING",
-                          "ARIMA(1,1,0)(1,1,1)[12] LAMBDA 0 - SLIDING"),
-       col=1:10, lty=1, xpd=TRUE, y.intersp = 1, cex=0.8,inset=c(-0.02, 0.02))
-```
+                          "ARIMA(2,1,2)(1,1,2)[12] LAMBDA 0 - SLIDING"),
+       col=1:6, lty=1, cex=0.7)
 
-Out of all models, Seasonal ARIMA with sliding window has the lowest Root Mean Square Error, indicating it is the Seasonal ARIMA with sliding win
-
-```{r}
-plot(1:48, rowMeans(AICc_1,na.rm=TRUE), type="l", 
-     main = "AICc vs number of iterations", xlab='Number of iterations', ylab='AICc')
-lines(1:48, rowMeans(AICc_2,na.rm=TRUE), type="l",col=2)
-#lines(1:48, rowMeans(AICc_5,na.rm=TRUE), type="l",col=3)
-#lines(1:48, rowMeans(AICc_6,na.rm=TRUE), type="l",col=4)
-legend("topleft",legend=c("ETS: 0 - EXPANDING","ETS:0 - SLIDING","SARIMA: 0 - EXPANDING","SARIMA: 0 - SLIDING"),col=1:4,lty=1, cex=0.8)
-```
-
-```{r}
-plot(1:48, rowMeans(AICc_3,na.rm=TRUE), type="l", 
-     main = "AICc vs number of iterations")
-lines(1:48, rowMeans(AICc_4,na.rm=TRUE), type="l",col=2)
-lines(1:48, rowMeans(AICc_7,na.rm=TRUE), type="l",col=3)
-lines(1:48, rowMeans(AICc_8,na.rm=TRUE), type="l",col=4)
-legend("topleft",legend=c("ETS: AUTO - EXPANDING","ETS:AUTO - SLIDING","SARIMA:AUTO - EXPANDING","SARIMA:AUTO - SLIDING"),col=1:4,lty=1, cex=0.8)
-```
-
-ETS sliding window is a better model than ETS expanding window because it has lower AICc. ETS sliding window is relatively more stable while ETS expanding window has higher AICc as the number of iteration increase.
-
-Out of all models, Seasonal ARIMA with sliding model cross validation method is the best model because it has the lowest AICc.
-
-```{r}
-checkresiduals(fit_1)
-checkresiduals(fit_2)
-checkresiduals(fit_3)
-checkresiduals(fit_4)
-checkresiduals(fit_5)
-checkresiduals(fit_6)
-checkresiduals(fit_7)
-checkresiduals(fit_8)
 ```
